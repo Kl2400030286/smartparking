@@ -1,0 +1,19 @@
+# Maven build output
+target/
+
+# IDE metadata
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+
+# Local configuration and secrets
+.env
+!.env.example
+
+# Logs and temporary files
+*.log
+hs_err_pid*
+
+/.metadata/

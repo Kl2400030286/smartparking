@@ -1,0 +1,73 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: parkgrid-mysql
+    environment:
+      MYSQL_DATABASE: parkingslot
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+    ports: ["3306:3306"]
+    volumes: [parkgrid-mysql:/var/lib/mysql, ./database/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro]
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","localhost","-uroot","-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  parking-service:
+    build: .
+    environment:
+      MYSQL_URL: jdbc:mysql://mysql:3306/parkingslot?serverTimezone=UTC
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_BOOTSTRAP_ENABLED: ${ADMIN_BOOTSTRAP_ENABLED:-false}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      EUREKA_ENABLED: "true"
+      EUREKA_REGISTER: "true"
+      EUREKA_FETCH: "true"
+      EUREKA_URL: http://eureka:8761/eureka
+    ports: ["8080:8080"]
+    depends_on:
+      mysql: {condition: service_healthy}
+      eureka: {condition: service_started}
+  booking-service:
+    build:
+      context: .
+      dockerfile: services/booking-service/Dockerfile
+    environment:
+      PARKING_URL: http://parking-service:8080
+      BILLING_URL: http://billing-service:8083
+      EUREKA_URL: http://eureka:8761/eureka
+    ports: ["8082:8082"]
+    depends_on:
+      eureka: {condition: service_started}
+      parking-service: {condition: service_started}
+  billing-service:
+    build:
+      context: .
+      dockerfile: services/billing-service/Dockerfile
+    environment:
+      PARKING_URL: http://parking-service:8080
+      EUREKA_URL: http://eureka:8761/eureka
+    ports: ["8083:8083"]
+    depends_on:
+      eureka: {condition: service_started}
+      parking-service: {condition: service_started}
+  eureka:
+    build:
+      context: .
+      dockerfile: eureka/Dockerfile
+    container_name: parkgrid-eureka
+    ports: ["8761:8761"]
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: parkgrid-gateway
+    environment:
+      EUREKA_URL: http://eureka:8761/eureka
+    ports: ["8081:8081"]
+    depends_on:
+      eureka: {condition: service_started}
+volumes:
+  parkgrid-mysql:
